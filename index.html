@@ -1,0 +1,171 @@
+
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sürdürülebilir Akıllı Sınıf</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background: #0f172a; color: white; font-family: sans-serif; }
+        .nfc-pulse { animation: pulse 2s infinite; }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+            70% { box-shadow: 0 0 0 20px rgba(59, 130, 246, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        }
+        .success-bg { background: linear-gradient(135deg, #059669 0%, #10b981 100%); }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col p-4">
+
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6 bg-slate-800 p-4 rounded-2xl border border-slate-700">
+        <div>
+            <h1 class="text-xl font-black text-blue-400">AKILLI SINIF</h1>
+            <div id="status-tag" class="text-[10px] font-bold bg-slate-700 px-2 py-0.5 rounded text-slate-400 uppercase tracking-widest">SİSTEM BEKLEMEDE</div>
+        </div>
+        <div class="text-right">
+            <p id="clock" class="text-xl font-mono font-bold">00:00</p>
+        </div>
+    </div>
+
+    <!-- Scanner Area -->
+    <div class="flex-grow flex flex-col items-center justify-center">
+        <div id="nfc-target" class="w-44 h-44 rounded-full bg-slate-800 border-4 border-slate-700 flex items-center justify-center mb-8 transition-all duration-500">
+            <i id="main-icon" class="fas fa-id-card text-5xl text-slate-600"></i>
+        </div>
+
+        <div id="info-box" class="text-center mb-8 px-4">
+            <h2 id="main-text" class="text-2xl font-bold mb-2">Başlatılmadı</h2>
+            <p id="sub-text" class="text-slate-400 text-sm">NFC özelliğini aktif etmek için butona dokunun.</p>
+        </div>
+
+        <button id="scan-btn" class="w-full max-w-xs bg-blue-600 hover:bg-blue-500 text-white font-bold py-5 rounded-2xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-3">
+            <i class="fas fa-bolt"></i> SİSTEMİ BAŞLAT
+        </button>
+        
+        <!-- Gizli Simülasyon Butonu (Eğer NFC hata verirse diye) -->
+        <button id="sim-btn" class="mt-4 text-slate-600 text-[10px] uppercase tracking-widest underline">Simülasyonu Aç</button>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-2 gap-3 mt-8">
+        <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700">
+            <p class="text-[10px] text-slate-500 font-bold uppercase mb-1">Mevcut</p>
+            <p class="text-2xl font-black"><span id="count">0</span> / 2</p>
+        </div>
+        <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700">
+            <p class="text-[10px] text-slate-500 font-bold uppercase mb-1">Tasarruf</p>
+            <p class="text-2xl font-black text-green-400">%<span id="save">0</span></p>
+        </div>
+    </div>
+
+    <!-- Attendance Modal -->
+    <div id="welcome-modal" class="fixed inset-0 success-bg z-50 flex flex-col items-center justify-center transform translate-y-full transition-transform duration-500 px-6 text-center">
+        <div class="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center mb-6">
+            <i class="fas fa-check text-5xl text-white"></i>
+        </div>
+        <h3 class="text-5xl font-black mb-2 uppercase">HOŞ GELDİN</h3>
+        <p id="student-name" class="text-2xl font-medium mb-8">Öğrenci Adı</p>
+        <div class="bg-black/20 px-6 py-2 rounded-full text-sm font-bold">KAYIT BAŞARILI</div>
+    </div>
+
+    <script>
+        const students = {
+            "167": "Muhammed Emin Akman",
+            "166": "Mehmet Abay Kurban"
+        };
+        let presentCount = 0;
+
+        const scanBtn = document.getElementById('scan-btn');
+        const mainText = document.getElementById('main-text');
+        const subText = document.getElementById('sub-text');
+        const nfcTarget = document.getElementById('nfc-target');
+        const welcomeModal = document.getElementById('welcome-modal');
+        const statusTag = document.getElementById('status-tag');
+
+        // Saat
+        setInterval(() => {
+            document.getElementById('clock').innerText = new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'});
+        }, 1000);
+
+        // Sesli Okuma
+        function announce(name) {
+            const speech = new SpeechSynthesisUtterance("Hoş geldin " + name);
+            speech.lang = 'tr-TR';
+            window.speechSynthesis.speak(speech);
+        }
+
+        // Öğrenci Bul ve Kaydet
+        function processStudent(id) {
+            const name = students[id];
+            if (name) {
+                presentCount++;
+                document.getElementById('count').innerText = presentCount;
+                document.getElementById('save').innerText = presentCount * 25;
+                document.getElementById('student-name').innerText = name;
+                
+                welcomeModal.classList.remove('translate-y-full');
+                announce(name);
+                
+                setTimeout(() => {
+                    welcomeModal.classList.add('translate-y-full');
+                }, 3000);
+            }
+        }
+
+        // NFC TARAMA BAŞLAT
+        scanBtn.addEventListener('click', async () => {
+            // Tarayıcı Desteği Kontrolü
+            if (!('NDEFReader' in window)) {
+                alert("NFC Desteklenmiyor. Simülasyon moduna geçiliyor.");
+                openSim();
+                return;
+            }
+
+            try {
+                const ndef = new NDEFReader();
+                await ndef.scan();
+                
+                // UI Güncelle
+                scanBtn.disabled = true;
+                scanBtn.innerHTML = '<i class="fas fa-spinner animate-spin"></i> TARANIYOR...';
+                scanBtn.classList.replace('bg-blue-600', 'bg-slate-700');
+                nfcTarget.classList.add('nfc-pulse', 'border-blue-500');
+                document.getElementById('main-icon').classList.replace('text-slate-600', 'text-blue-500');
+                mainText.innerText = "Kart Bekleniyor";
+                subText.innerText = "Lütfen kartı telefonun arkasına yaklaştırın.";
+                statusTag.innerText = "TARAMA AKTİF";
+                statusTag.classList.replace('bg-slate-700', 'bg-green-600');
+
+                ndef.onreading = event => {
+                    const decoder = new TextDecoder();
+                    for (const record of event.message.records) {
+                        const content = decoder.decode(record.data);
+                        // Kartın içindeki metinde numara ara
+                        if (content.includes("167")) processStudent("167");
+                        else if (content.includes("166")) processStudent("166");
+                    }
+                };
+
+            } catch (error) {
+                console.error(error);
+                if (error.name === "SecurityError") {
+                    alert("GÜVENLİK HATASI: Web NFC sadece tam sayfa (top-level) ve HTTPS üzerinde çalışır. Lütfen bu sayfayı yeni sekmede açın.");
+                } else {
+                    alert("Hata: " + error.message);
+                }
+            }
+        });
+
+        // Simülasyon Modu (Manuel Giriş)
+        function openSim() {
+            const id = prompt("Simülasyon Modu: Okul No Girin (166 veya 167)");
+            if(id) processStudent(id);
+        }
+        document.getElementById('sim-btn').addEventListener('click', openSim);
+    </script>
+</body>
+</html>
